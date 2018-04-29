@@ -590,7 +590,7 @@ func throw(s string) {
 	if gp.m.throwing == 0 {
 		gp.m.throwing = 1
 	}
-	fatalpanic(nil)
+	fatalthrow(0)
 	*(*int)(nil) = 0 // not reached
 }
 
@@ -631,18 +631,43 @@ func recovery(gp *g) {
 	gogo(&gp.sched)
 }
 
-// fatalpanic implements an unrecoverable panic. It freezes the
-// system, prints panic messages if msgs != nil, prints stack traces
-// starting from its caller, and terminates the process.
+// fatalthrow implements an unrecoverable runtime throw. It freezes the
+// system, prints stack traces starting from its caller, and terminates the
+// process.
 //
-// If msgs != nil, it also decrements runningPanicDefers once main is
-// blocked from exiting.
+//go:nosplit
+func fatalthrow(arg0 uintptr) {
+	pc := getcallerpc()
+	sp := getcallersp(unsafe.Pointer(&arg0))
+	gp := getg()
+	// Switch to the system stack to avoid any stack growth, which
+	// may make things worse if the runtime is in a bad state.
+	systemstack(func() {
+		startpanic_m()
+
+		if dopanic_m(gp, pc, sp) {
+			// crash uses a decent amount of nosplit stack and we're already
+			// low on stack in throw, so crash on the system stack (unlike
+			// fatalpanic).
+			crash()
+		}
+
+		exit(2)
+	})
+
+	*(*int)(nil) = 0 // not reached
+}
+
+// fatalpanic implements an unrecoverable panic. It is like fatalthrow, except
+// that if msgs != nil, fatalpanic also prints panic messages and decrements
+// runningPanicDefers once main is blocked from exiting.
 //
 //go:nosplit
 func fatalpanic(msgs *_panic) {
 	pc := getcallerpc()
 	sp := getcallersp(unsafe.Pointer(&msgs))
 	gp := getg()
+	var docrash bool
 	// Switch to the system stack to avoid any stack growth, which
 	// may make things worse if the runtime is in a bad state.
 	systemstack(func() {
@@ -658,8 +683,20 @@ func fatalpanic(msgs *_panic) {
 			printpanics(msgs)
 		}
 
-		dopanic_m(gp, pc, sp) // should never return
+		docrash = dopanic_m(gp, pc, sp)
 	})
+
+	if docrash {
+		// By crashing outside the above systemstack call, debuggers
+		// will not be confused when generating a backtrace.
+		// Function crash is marked nosplit to avoid stack growth.
+		crash()
+	}
+
+	systemstack(func() {
+		exit(2)
+	})
+
 	*(*int)(nil) = 0 // not reached
 }
 
@@ -717,7 +754,7 @@ func startpanic_m() bool {
 var didothers bool
 var deadlock mutex
 
-func dopanic_m(gp *g, pc, sp uintptr) {
+func dopanic_m(gp *g, pc, sp uintptr) bool {
 	if gp.sig != 0 {
 		signame := signame(gp.sig)
 		if signame != "" {
@@ -758,11 +795,7 @@ func dopanic_m(gp *g, pc, sp uintptr) {
 		lock(&deadlock)
 	}
 
-	if docrash {
-		crash()
-	}
-
-	exit(2)
+	return docrash
 }
 
 // canpanic returns false if a signal should throw instead of
