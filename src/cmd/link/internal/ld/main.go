@@ -81,6 +81,7 @@ var (
 	FlagS           = flag.Bool("s", false, "disable symbol table")
 	flagU           = flag.Bool("u", false, "reject unsafe packages")
 	FlagW           = flag.Bool("w", false, "disable DWARF generation")
+	flagOmitGoDWARF = flag.Bool("omitgodwarf", false, "disable Go specific DWARF generation")
 	Flag8           bool // use 64-bit addresses in symbol table
 	flagInterpreter = flag.String("I", "", "use `linker` as ELF dynamic linker")
 	FlagDebugTramp  = flag.Int("debugtramp", 0, "debug trampolines")
@@ -160,6 +161,8 @@ func Main(arch *sys.Arch, theArch Arch) {
 	}
 
 	interpreter = *flagInterpreter
+
+	ctxt.OmitGoDWARF = *flagOmitGoDWARF
 
 	libinit(ctxt) // creates outfile
 

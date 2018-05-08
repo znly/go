@@ -898,3 +898,96 @@ func main() {
 		t.Errorf("DWARF type offset was %#x+%#x, but test program said %#x", rtAttr.(uint64), types.Addr, addr)
 	}
 }
+
+func TestOmitGoDWARFAttributes(t *testing.T) {
+	testenv.MustHaveGoBuild(t)
+
+	if runtime.GOOS == "plan9" {
+		t.Skip("skipping on plan9; no DWARF symbol table in executables")
+	}
+
+	const prog = `
+package main
+
+type S struct {
+	V int
+}
+
+func main() {
+	s := &S{}
+	s.V = 12
+	print(s.V)
+}
+`
+	dir, err := ioutil.TempDir("", "TestOmitGoDwarfAttributes")
+	if err != nil {
+		t.Fatalf("could not create directory: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	f := gobuild(t, dir, prog, "-ldflags=-omitgodwarf")
+	defer f.Close()
+
+	d, err := f.DWARF()
+	if err != nil {
+		t.Fatalf("error reading DWARF: %v", err)
+	}
+
+	entries := make([]*dwarf.Entry, 0)
+	rdr := d.Reader()
+	for entry, err := rdr.Next(); entry != nil; entry, err = rdr.Next() {
+		if err != nil {
+			t.Fatalf("error reading DWARF: %v", err)
+		}
+
+		for i, f := range entry.Field {
+			if f.Attr >= 0x2000 && f.Attr <= 0x3fff { // DW_AT_lo_user - DW_AT_high_user
+				t.Errorf("non standard attribute entry_offset=0x%x index=%d attr=0x%x", entry.Offset, i, int(f.Attr))
+			}
+		}
+		entries = append(entries, entry)
+	}
+
+	fgd := gobuild(t, dir, prog, "-ldflags=")
+	defer fgd.Close()
+
+	d, err = fgd.DWARF()
+	if err != nil {
+		t.Fatalf("error reading DWARF: %v", err)
+	}
+
+	rdr = d.Reader()
+
+	i := 0
+	for entry, err := rdr.Next(); entry != nil; entry, err = rdr.Next() {
+		if err != nil {
+			t.Fatalf("error reading DWARF: %v", err)
+		}
+
+		if i >= len(entries) {
+			t.Fatalf("prog compiled without omitgodwarf flag as more entries")
+		}
+
+		other := entries[i]
+		if other.Tag != entry.Tag {
+			t.Errorf("unexpected tag at index=%d offset=0x%0x", i, entry.Offset)
+		}
+
+		fi := 0
+		for _, f := range entry.Field {
+			if f.Attr >= 0x2000 && f.Attr <= 0x3fff { // DW_AT_lo_user / DW_AT_high_user
+				continue
+			}
+			if other.Field[fi].Attr != f.Attr {
+				t.Errorf("expected same attribute=0x%x offset=0x%x", int(f.Attr), entry.Offset)
+			}
+			fi++
+		}
+		i++
+	}
+
+	if i != len(entries) {
+		t.Errorf("number of entries differs expected=%d was=%d", i, len(entries))
+	}
+
+}

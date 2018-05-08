@@ -184,6 +184,7 @@ type Context interface {
 	RecordChildDieOffsets(s Sym, vars []*Var, offsets []int32)
 	AddString(s Sym, v string)
 	AddFileRef(s Sym, f interface{})
+	OmitGoDWARF() bool
 	Logf(format string, args ...interface{})
 }
 
@@ -782,8 +783,14 @@ var abbrevs = [DW_NABRV]dwAbbrev{
 	},
 }
 
-// GetAbbrev returns the contents of the .debug_abbrev section.
-func GetAbbrev() []byte {
+func isVendorAttibute(attr uint16) bool {
+	// DW_AT_lo_user to DW_AT_high_user
+	return attr >= 0x2000 && attr <= 0x3fff
+}
+
+// GetAbbrev returns the contents of the .debug_abbrev section. omitGoDwarf
+// allows to filter out go specific attributes.
+func GetAbbrev(ctxt Context) []byte {
 	var buf []byte
 	for i := 1; i < DW_NABRV; i++ {
 		// See section 7.5.3
@@ -791,6 +798,9 @@ func GetAbbrev() []byte {
 		buf = AppendUleb128(buf, uint64(abbrevs[i].tag))
 		buf = append(buf, abbrevs[i].children)
 		for _, f := range abbrevs[i].attr {
+			if ctxt.OmitGoDWARF() && isVendorAttibute(f.attr) {
+				continue
+			}
 			buf = AppendUleb128(buf, uint64(f.attr))
 			buf = AppendUleb128(buf, uint64(f.form))
 		}
@@ -944,12 +954,16 @@ Outer:
 	for _, f := range abbrevs[abbrev].attr {
 		for ap := attr; ap != nil; ap = ap.Link {
 			if ap.Atr == f.attr {
-				putattr(ctxt, s, abbrev, int(f.form), int(ap.Cls), ap.Value, ap.Data)
+				if !ctxt.OmitGoDWARF() || !isVendorAttibute(f.attr) {
+					putattr(ctxt, s, abbrev, int(f.form), int(ap.Cls), ap.Value, ap.Data)
+				}
 				continue Outer
 			}
 		}
 
-		putattr(ctxt, s, abbrev, int(f.form), 0, 0, nil)
+		if !ctxt.OmitGoDWARF() || !isVendorAttibute(f.attr) {
+			putattr(ctxt, s, abbrev, int(f.form), 0, 0, nil)
+		}
 	}
 }
 
