@@ -502,6 +502,10 @@ func (c dwCtxt) Logf(format string, args ...interface{}) {
 	c.Link.Logf(format, args...)
 }
 
+func (c dwCtxt) OmitGoDWARF() bool {
+	return false
+}
+
 func (ctxt *Link) dwarfSym(s *LSym) (dwarfInfoSym, dwarfLocSym, dwarfRangesSym, dwarfAbsFnSym *LSym) {
 	if s.Type != objabi.STEXT {
 		ctxt.Diag("dwarfSym of non-TEXT %v", s)

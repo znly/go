@@ -19,7 +19,7 @@ import (
 	"testing"
 )
 
-func testDWARF(t *testing.T, env ...string) {
+func testDWARF(t *testing.T, opts []string, env ...string) {
 	testenv.MustHaveCGO(t)
 	testenv.MustHaveGoBuild(t)
 
@@ -48,13 +48,15 @@ func testDWARF(t *testing.T, env ...string) {
 		t.Run(prog, func(t *testing.T) {
 			exe := filepath.Join(tmpDir, prog+".exe")
 			dir := "../../runtime/testdata/" + prog
-			cmd := exec.Command(testenv.GoToolPath(t), "build", "-o", exe, dir)
+			cmd := exec.Command(testenv.GoToolPath(t), "build", "-o", exe)
+			cmd.Args = append(cmd.Args, opts...)
+			cmd.Args = append(cmd.Args, dir)
 			if env != nil {
 				cmd.Env = append(os.Environ(), env...)
 			}
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				t.Fatalf("go build -o %v %v: %v\n%s", exe, dir, err, out)
+				t.Fatalf("go build %s -o %v %v: %v\n%s", strings.Join(opts, " "), exe, dir, err, out)
 			}
 
 			f, err := objfile.Open(exe)
@@ -128,7 +130,7 @@ func testDWARF(t *testing.T, env ...string) {
 }
 
 func TestDWARF(t *testing.T) {
-	testDWARF(t)
+	testDWARF(t, nil)
 }
 
 func TestDWARFiOS(t *testing.T) {
@@ -145,6 +147,14 @@ func TestDWARFiOS(t *testing.T) {
 		t.Skipf("error running xcrun, required for iOS cross build: %v", err)
 	}
 	cc := "CC=" + runtime.GOROOT() + "/misc/ios/clangwrap.sh"
-	testDWARF(t, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm", "GOARM=7")
-	testDWARF(t, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm64")
+	testDWARF(t, nil, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm", "GOARM=7")
+	testDWARF(t, nil, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm64")
+}
+
+func TestDWARFOmitGoDWARF(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	testDWARF(t, []string{"-ldflags=-omitgodwarf"})
 }

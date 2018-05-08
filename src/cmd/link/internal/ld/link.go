@@ -63,6 +63,8 @@ type Link struct {
 	IsELF    bool
 	HeadType objabi.HeadType
 
+	OmitGoDWARF bool
+
 	linkShared bool // link against installed Go shared libraries
 	LinkMode   LinkMode
 	BuildMode  BuildMode
