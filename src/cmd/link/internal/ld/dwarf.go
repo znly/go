@@ -75,6 +75,10 @@ func (c dwctxt) Logf(format string, args ...interface{}) {
 	c.linkctxt.Logf(format, args...)
 }
 
+func (c dwctxt) OmitGoDWARF() bool {
+	return c.linkctxt.OmitGoDWARF
+}
+
 // At the moment these interfaces are only used in the compiler.
 
 func (c dwctxt) AddFileRef(s dwarf.Sym, f interface{}) {
@@ -100,7 +104,7 @@ var dwarfp []*sym.Symbol
 func writeabbrev(ctxt *Link) *sym.Symbol {
 	s := ctxt.Syms.Lookup(".debug_abbrev", 0)
 	s.Type = sym.SDWARFSECT
-	s.AddBytes(dwarf.GetAbbrev())
+	s.AddBytes(dwarf.GetAbbrev(&dwctxt{ctxt}))
 	return s
 }
 

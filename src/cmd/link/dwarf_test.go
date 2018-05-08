@@ -19,7 +19,7 @@ import (
 	"testing"
 )
 
-func testDWARF(t *testing.T, buildmode string, expectDWARF bool, env ...string) {
+func testDWARF(t *testing.T, buildmode string, expectDWARF bool, opts []string, env ...string) {
 	testenv.MustHaveCGO(t)
 	testenv.MustHaveGoBuild(t)
 
@@ -52,13 +52,14 @@ func testDWARF(t *testing.T, buildmode string, expectDWARF bool, env ...string) 
 			if buildmode != "" {
 				cmd.Args = append(cmd.Args, "-buildmode", buildmode)
 			}
+			cmd.Args = append(cmd.Args, opts...)
 			cmd.Args = append(cmd.Args, dir)
 			if env != nil {
 				cmd.Env = append(os.Environ(), env...)
 			}
 			out, err := cmd.CombinedOutput()
 			if err != nil {
-				t.Fatalf("go build -o %v %v: %v\n%s", exe, dir, err, out)
+				t.Fatalf("go build %s -o %v %v: %v\n%s", strings.Join(opts, " "), exe, dir, err, out)
 			}
 
 			if buildmode == "c-archive" {
@@ -148,7 +149,7 @@ func testDWARF(t *testing.T, buildmode string, expectDWARF bool, env ...string) 
 }
 
 func TestDWARF(t *testing.T) {
-	testDWARF(t, "", true)
+	testDWARF(t, "", true, nil)
 }
 
 func TestDWARFiOS(t *testing.T) {
@@ -166,9 +167,17 @@ func TestDWARFiOS(t *testing.T) {
 	}
 	cc := "CC=" + runtime.GOROOT() + "/misc/ios/clangwrap.sh"
 	// iOS doesn't allow unmapped segments, so iOS executables don't have DWARF.
-	testDWARF(t, "", false, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm", "GOARM=7")
-	testDWARF(t, "", false, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm64")
+	testDWARF(t, "", false, nil, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm", "GOARM=7")
+	testDWARF(t, "", false, nil, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm64")
 	// However, c-archive iOS objects have embedded DWARF.
-	testDWARF(t, "c-archive", true, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm", "GOARM=7")
-	testDWARF(t, "c-archive", true, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm64")
+	testDWARF(t, "c-archive", true, nil, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm", "GOARM=7")
+	testDWARF(t, "c-archive", true, nil, cc, "CGO_ENABLED=1", "GOOS=darwin", "GOARCH=arm64")
+}
+
+func TestDWARFOmitGoDWARF(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
+
+	testDWARF(t, "", true, []string{"-ldflags=-omitgodwarf"})
 }
