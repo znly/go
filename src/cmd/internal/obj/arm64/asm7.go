@@ -775,7 +775,7 @@ func span7(ctxt *obj.Link, cursym *obj.LSym, newprog obj.ProgAlloc) {
 	}
 
 	c := ctxt7{ctxt: ctxt, newprog: newprog, cursym: cursym, autosize: int32(p.To.Offset & 0xffffffff), extrasize: int32(p.To.Offset >> 32)}
-	p.To.Offset &= 0xffffffff  // extrasize is no longer needed
+	p.To.Offset &= 0xffffffff // extrasize is no longer needed
 
 	bflag := 1
 	pc := int64(0)
