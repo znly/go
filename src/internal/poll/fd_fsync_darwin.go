@@ -18,8 +18,9 @@ func (fd *FD) Fsync() error {
 	}
 	defer fd.decref()
 
-	_, e1 := fcntl(fd.Sysfd, syscall.F_FULLFSYNC, 0)
-	return e1
+	// _, e1 := fcntl(fd.Sysfd, syscall.F_FULLFSYNC, 0)
+	// return e1
+	return syscall.Fsync(fd.Sysfd)
 }
 
 // Implemented in syscall/syscall_darwin.go.
