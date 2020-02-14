@@ -713,6 +713,10 @@ func gopanic(e interface{}) {
 		}
 	}
 
+	// znly patch: from here, copy the panic output into a file.
+	// see src/runtime/panic_report.go
+	enableWritePanic()
+
 	// ran out of deferred calls - old-school panic now
 	// Because it is unsafe to call arbitrary user code after freezing
 	// the world, we call preprintpanics to invoke all necessary Error

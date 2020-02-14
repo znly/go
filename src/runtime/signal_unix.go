@@ -425,6 +425,13 @@ func dieFromSignal(sig uint32) {
 	unblocksig(sig)
 	// Mark the signal as unhandled to ensure it is forwarded.
 	atomic.Store(&handlingSig[sig], 0)
+
+	// znly patch: check if flag `ExitOnPanic` is set, and if so, do not raise a
+	// signal.
+	if ExitOnPanic {
+		exit(2)
+	}
+
 	raise(sig)
 
 	// That should have killed us. On some systems, though, raise
