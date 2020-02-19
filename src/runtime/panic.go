@@ -607,6 +607,71 @@ func printpanics(p *_panic) {
 	print("\n")
 }
 
+var globalPanicHandler func(err interface{}) = nil
+
+// count of calls to the global panic handler. This lets the runtime checks
+// if a panic happens in the global panic handler and not call it back if it
+// happens.
+var globalPanicHandlerCall uint32 = 0
+
+// SetGlobalPanicHandler sets a function which will be called when a
+// non-recovered panic happens. This lets the caller access debug information
+// before the crash.
+//
+// If the caller is trying to set a new global panic handler while another one
+// is already registered, this function will panic.
+//
+// If
+// 1. a panic happens while the global panic handler is being called, or
+// 2. a panic happens in another running goroutine while the global panic
+// handler is being called,
+//
+// Then, the global panic handler won't be called (again). In other words, the
+// global panic handler will be called only once in a session.
+//
+// This function is NOT thread-safe.
+//
+// IMPORTANT NOTE
+// This provides a way to perform dynamic operations while the application
+// should be considered in an inconsistent state: we're about to crash because
+// of a non-recovered panic. So keep in mind you're walking outside marked paths
+// and think of the effects of potential inconsistencies in the global program
+// state.
+//
+// One would advise to do nothing fancy in the global panic handler.
+//
+// USAGE EXAMPLE
+//
+//     import (
+//         "fmt",
+//         "runtime"
+//     )
+//
+//     func onPanic(err interface{}) {
+//     	   fmt.Println("panic reason:", err)
+//     	   dump := make([]byte, 1*1024*1024) // 1 MB buffer
+//     	   runtime.Stack(dump, true)
+//     	   fmt.Println(string(dump))
+//     }
+//
+//     func main() {
+//     	   runtime.SetGlobalPanicHandler(onPanic)
+//
+//     	   // provoke a panic from a SIGNAL
+//     	   var i *int
+//     	   *i = 42
+//
+//     	   println("program exit normally")
+//     }
+//
+func SetGlobalPanicHandler(f func(err interface{})) {
+	if f != nil && globalPanicHandler != nil {
+		panic("a global panic handler was already set.")
+	}
+
+	globalPanicHandler = f
+}
+
 // The implementation of the predeclared function panic.
 func gopanic(e interface{}) {
 	gp := getg()
@@ -711,6 +776,14 @@ func gopanic(e interface{}) {
 			mcall(recovery)
 			throw("recovery failed") // mcall should not return
 		}
+	}
+
+	// check if a global panic handler had been set and if so, call it on the
+	// first raised panic of the goroutine. If the global panic handler itself
+	// raises a panic, it won't be called a second time and will raise a
+	// old-scholl panic.
+	if globalPanicHandler != nil && atomic.Xadd(&globalPanicHandlerCall, 1) == 1 {
+		globalPanicHandler(e)
 	}
 
 	// ran out of deferred calls - old-school panic now
