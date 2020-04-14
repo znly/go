@@ -2,6 +2,7 @@
 
 //go:build go1.10 && !go1.13
 // +build go1.10,!go1.13
+// +build !omitidna
 
 package idna
 
