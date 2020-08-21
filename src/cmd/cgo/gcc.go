@@ -3118,15 +3118,18 @@ func (c *typeConv) badJNI(dt *dwarf.TypedefType) bool {
 			case *dwarf.VoidType:
 				return true
 			case *dwarf.StructType:
-				if v.StructName == "_jobject" && len(v.Field) == 0 {
-					switch v.Kind {
-					case "struct":
-						if v.Incomplete {
-							return true
-						}
-					case "class":
-						if !v.Incomplete {
-							return true
+				if len(v.Field) == 0 {
+					switch v.StructName {
+					case "_jobject", "_jmethodID", "_jfieldID":
+						switch v.Kind {
+						case "struct":
+							if v.Incomplete {
+								return true
+							}
+						case "class":
+							if !v.Incomplete {
+								return true
+							}
 						}
 					}
 				}
@@ -3167,4 +3170,6 @@ var jniTypes = map[string]string{
 	"jdoubleArray":  "jarray",
 	"jobjectArray":  "jarray",
 	"jweak":         "jobject",
+	"jmethodID":     "",
+	"jfieldID":      "",
 }
