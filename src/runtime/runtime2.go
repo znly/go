@@ -1147,4 +1147,4 @@ var (
 )
 
 // Must agree with internal/buildcfg.Experiment.FramePointer.
-const framepointer_enabled = GOARCH == "amd64" || GOARCH == "arm64"
+const framepointer_enabled = GOARCH == "amd64" || (GOARCH == "arm64" && (GOOS != "android" || GOOS == "linux"))
