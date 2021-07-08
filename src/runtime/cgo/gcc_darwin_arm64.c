@@ -80,44 +80,32 @@ init_working_dir()
 		fprintf(stderr, "runtime/cgo: no main bundle\n");
 		return;
 	}
-	CFURLRef url_ref = CFBundleCopyResourceURL(bundle, CFSTR("Info"), CFSTR("plist"), NULL);
-	if (url_ref == NULL) {
-		// No Info.plist found. It can happen on Corellium virtual devices.
+	CFURLRef bundle_url_ref = CFBundleCopyBundleURL(bundle);
+	if (bundle_url_ref == NULL) {
 		return;
 	}
-	CFStringRef url_str_ref = CFURLGetString(url_ref);
-	char buf[MAXPATHLEN];
-	Boolean res = CFStringGetCString(url_str_ref, buf, sizeof(buf), kCFStringEncodingUTF8);
-	CFRelease(url_ref);
+	char bundle_path[MAXPATHLEN];
+	Boolean res = CFURLGetFileSystemRepresentation(bundle_url_ref, TRUE, (UInt8 *)bundle_path, MAXPATHLEN);
+	CFRelease(bundle_url_ref);
 	if (!res) {
 		fprintf(stderr, "runtime/cgo: cannot get URL string\n");
 		return;
 	}
 
-	// url is of the form "file:///path/to/Info.plist".
-	// strip it down to the working directory "/path/to".
-	int url_len = strlen(buf);
-	if (url_len < sizeof("file://")+sizeof("/Info.plist")) {
-		fprintf(stderr, "runtime/cgo: bad URL: %s\n", buf);
-		return;
-	}
-	buf[url_len-sizeof("/Info.plist")+1] = 0;
-	char *dir = &buf[0] + sizeof("file://")-1;
-
-	if (chdir(dir) != 0) {
-		fprintf(stderr, "runtime/cgo: chdir(%s) failed\n", dir);
+	if (chdir(bundle_path) != 0) {
+		fprintf(stderr, "runtime/cgo: chdir(%s) failed\n", bundle_path);
 	}
 
 	// The test harness in go_ios_exec passes the relative working directory
 	// in the GoExecWrapperWorkingDirectory property of the app bundle.
 	CFStringRef wd_ref = CFBundleGetValueForInfoDictionaryKey(bundle, CFSTR("GoExecWrapperWorkingDirectory"));
 	if (wd_ref != NULL) {
-		if (!CFStringGetCString(wd_ref, buf, sizeof(buf), kCFStringEncodingUTF8)) {
+		if (!CFStringGetCString(wd_ref, bundle_path, sizeof(bundle_path), kCFStringEncodingUTF8)) {
 			fprintf(stderr, "runtime/cgo: cannot get GoExecWrapperWorkingDirectory string\n");
 			return;
 		}
-		if (chdir(buf) != 0) {
-			fprintf(stderr, "runtime/cgo: chdir(%s) failed\n", buf);
+		if (chdir(bundle_path) != 0) {
+			fprintf(stderr, "runtime/cgo: chdir(%s) failed\n", bundle_path);
 		}
 	}
 }
