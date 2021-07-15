@@ -141,7 +141,7 @@ type PosBase struct {
 // A file PosBase's position is relative to itself, with the
 // position being filename:1:1.
 func NewFileBase(filename string) *PosBase {
-	filename = "x.go"
+	filename = "_cgo_.go"
 	base := &PosBase{MakePos(nil, linebase, colbase), filename, linebase, colbase}
 	base.pos.base = base
 	return base
